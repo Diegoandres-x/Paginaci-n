@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestión de memoria: Paginación</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#5b6470;--bd:#d9dde3;--so:#c7ccd4;--fr:#eef0f3;--ac:#1d4ed8;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171b;--card:#1d2127;--tx:#eceff3;--mu:#9aa4b2;--bd:#323943;--so:#3a414b;--fr:#262b32;--ac:#6ea0ff}}
+:root[data-theme="dark"]{--bg:#14171b;--card:#1d2127;--tx:#eceff3;--mu:#9aa4b2;--bd:#323943;--so:#3a414b;--fr:#262b32;--ac:#6ea0ff}
+html{color-scheme:light dark;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:14px}
+h1{font-size:19px;margin:0}.sub{color:var(--mu);font-size:13px;margin:2px 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px}
+.stats{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--mu)}.stats b{color:var(--tx)}
+.procs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.p{border-left:5px solid;padding:4px 8px;font-size:12.5px;background:var(--fr);border-radius:4px}
+.nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;padding:7px 12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;cursor:pointer}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}button:disabled{opacity:.4}
+h2{font-size:16px;margin:0 0 2px}.d{color:var(--mu);font-size:13px;margin:0 0 10px}
+.main{display:grid;grid-template-columns:minmax(150px,230px) 1fr;gap:14px}
+@media(max-width:560px){.main{grid-template-columns:1fr}}
+.fr{display:flex;justify-content:space-between;border:1px solid var(--bd);border-radius:5px;padding:3px 8px;margin-bottom:3px;font-size:13px;background:var(--fr);min-height:22px}
+.fr span:first-child{color:var(--mu)}
+.so{background:var(--so)}.free{opacity:.75}
+.tbl{display:inline-block;vertical-align:top;margin:0 8px 8px 0;font-size:12.5px;min-width:120px}
+.tbl h3{font-size:12.5px;margin:0 0 3px;padding-left:6px;border-left:5px solid}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid var(--bd);padding:2px 6px;text-align:center}
+.nc{font-size:11.5px;color:var(--ac);font-weight:600}
+.all{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.mini .fr{padding:1px 6px;font-size:11px;min-height:15px;margin-bottom:2px}.mini h4{margin:0 0 4px;font-size:12px}
+.wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<h1>Gestión de memoria: Paginación</h1>
+<div class="sub">Sistemas Operativos · Prof. Martín Arosemena · Grupo 1SF134 · Guillén, Mario · Cardenas, Diego · Moreno, Milagros</div>
+<div class="card">
+<div class="stats"><span>RAM total: <b>64 KB</b></span><span>Página/Marco: <b>4 KB</b></span><span>Marcos: <b>16 (0–15)</b></span><span>S.O. fijo: <b>marcos 0–1 (8 KB)</b></span><span>Páginas = ⌈Tamaño / 4 KB⌉</span></div>
+<div class="procs" id="procs" style="margin-top:10px"></div>
+</div>
+<div class="nav card">
+<button id="prev">◀ Anterior</button><button id="next">Siguiente ▶</button>
+<span id="sel" class="nav"></span><button id="all">Ver todos</button>
+</div>
+<div id="view"></div>
+<script>
+var P=[{n:"VS Code",kb:11},{n:"Spotify",kb:7},{n:"Chrome",kb:15},{n:"Word",kb:17},{n:"Teams",kb:13}];
+var H=["hsl(215 70% 50%)","hsl(145 55% 40%)","hsl(28 85% 50%)","hsl(285 50% 55%)","hsl(350 65% 52%)"];
+var EV=[["in",0],["in",1],["in",2],["out",1],["in",3],["out",0],["in",4]];
+var S=[],ram=[],pt={};
+P.forEach(function(p,i){p.pg=Math.ceil(p.kb/4);p.fr=p.pg*4-p.kb});
+for(var f=0;f<16;f++)ram.push(f<2?"SO":null);
+S.push({t:"Estado inicial (RAM vacía)",d:"Solo el S.O. ocupa los marcos 0 y 1. Marcos libres: 2 a 15.",ram:ram.slice(),pt:{}});
+EV.forEach(function(e){var p=e[1],m=[];
+ if(e[0]=="in"){pt[p]=[];for(var f=2;f<16&&pt[p].length<P[p].pg;f++)if(ram[f]===null){ram[f]=p;pt[p].push(f)}
+  var c=pt[p].some(function(x,i){return i&&x!=pt[p][i-1]+1});
+  S.push({t:"Entra P"+(p+1)+" ("+P[p].n+" · "+P[p].kb+" KB)",d:P[p].pg+" páginas → marcos ["+pt[p].join(", ")+"]"+(c?" · NO CONTIGUO":"")+" · Frag. interna: "+P[p].fr+" KB.",ram:ram.slice(),pt:JSON.parse(JSON.stringify(pt))})}
+ else{var old=pt[p].slice();pt[p].forEach(function(f){ram[f]=null});delete pt[p];
+  S.push({t:"Sale P"+(p+1)+" ("+P[p].n+")",d:"Libera los marcos ["+old.join(", ")+"].",ram:ram.slice(),pt:JSON.parse(JSON.stringify(pt))})}});
+var cur=0,all=false;
+function frames(s,mini){var h="";s.ram.forEach(function(v,f){
+ var c=v==="SO"?"fr so":v===null?"fr free":"fr",st=typeof v=="number"?' style="border-left:5px solid '+H[v]+'"':"";
+ var pg=typeof v=="number"?"P"+(v+1)+"."+s.pt[v].indexOf(f):v==="SO"?"S.O.":"libre";
+ h+='<div class="'+c+'"'+st+'><span>'+f+'</span><span>'+pg+'</span></div>'});return h}
+function render(){
+ var s=S[cur],h="";
+ if(all){h='<div class="all">'+S.map(function(x,i){return'<div class="card mini"><h4>M'+i+' · '+x.t+'</h4>'+frames(x)+'</div>'}).join("")+'</div>'}
+ else{var tb="";Object.keys(s.pt).forEach(function(k){k=+k;tb+='<div class="tbl"><h3 style="border-color:'+H[k]+'">P'+(k+1)+' · '+P[k].n+'</h3><table><tr><th>Página</th><th>Marco</th></tr>'+
+   s.pt[k].map(function(f,i){return'<tr><td>P'+(k+1)+'.'+i+'</td><td>'+f+'</td></tr>'}).join("")+'</table></div>'});
+  var fl=[];s.ram.forEach(function(v,f){if(v===null)fl.push(f)});
+  var used=s.ram.filter(function(v){return typeof v=="number"}).length;
+  h='<div class="card"><h2>M'+cur+' · '+s.t+'</h2><p class="d">'+s.d+'</p><div class="main"><div><b>RAM (64 KB)</b><div style="margin-top:6px">'+frames(s)+'</div></div><div class="wrap"><b>Tablas de páginas (MMU)</b><div style="margin-top:6px">'+(tb||'<span class="d">Sin procesos cargados.</span>')+'</div><p class="d"><b>Marcos libres ('+fl.length+'):</b> '+(fl.join(", ")||"ninguno")+'<br><b>Marcos de usuario ocupados:</b> '+used+' de 14</p></div></div></div>'}
+ document.getElementById("view").innerHTML=h;
+ document.getElementById("prev").disabled=cur==0||all;document.getElementById("next").disabled=cur==S.length-1||all;
+ document.getElementById("all").className=all?"on":"";
+ [].forEach.call(document.querySelectorAll("#sel button"),function(b,i){b.className=i==cur&&!all?"on":""})}
+document.getElementById("procs").innerHTML=P.map(function(p,i){return'<div class="p" style="border-color:'+H[i]+'"><b>P'+(i+1)+' · '+p.n+'</b> '+p.kb+' KB<br>'+p.pg+' págs (P'+(i+1)+'.0–P'+(i+1)+'.'+(p.pg-1)+') · Frag: '+p.fr+' KB</div>'}).join("");
+document.getElementById("sel").innerHTML=S.map(function(x,i){return'<button data-i="'+i+'">M'+i+'</button>'}).join("");
+document.getElementById("sel").onclick=function(e){if(e.target.dataset.i){cur=+e.target.dataset.i;all=false;render()}};
+document.getElementById("prev").onclick=function(){cur--;render()};
+document.getElementById("next").onclick=function(){cur++;render()};
+document.getElementById("all").onclick=function(){all=!all;render()};
+render();
+</script>
+</body>
+</html>
